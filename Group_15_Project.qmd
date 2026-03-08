@@ -1,0 +1,165 @@
+---
+title: "Measles Susceptibility in Glasgow Primary School Children"
+author: "DAS Group 15"
+date: today
+format:
+  html:
+    toc: false
+    number-sections: true
+execute:
+  echo: false
+  warning: false
+  message: false
+editor: 
+  markdown: 
+    wrap: 72
+---
+
+```{r}
+# load packages
+library(tidyverse)
+library(ggplot2)
+library(broom)
+library(knitr)
+library(kableExtra)
+```
+
+```{r}
+dat <- read.csv("DAProject15.csv")
+
+# create proportion column (Y susceptible out of N total)
+dat$prop <- dat$Y / dat$N
+
+# centre year at 2004 - makes the intercept easier to interpret
+# (i.e. intercept = log-odds at 2004, not at year 0 which makes no sense)
+dat$yr_c <- dat$Year - 2004
+
+# indicator for post-retraction period
+dat$post <- ifelse(dat$Year >= 2004, 1, 0)
+```
+
+# Introduction
+
+The measles, mumps and rubella (MMR) vaccine has been an important part
+of childhood immunisation programmes in the UK since the late 1980s. In
+1998, Wakefield published a paper claiming a link between the MMR
+vaccine and autism. Although the study was later found to be fraudulent
+and was fully retracted in 2010, the media coverage it received caused
+vaccination rates to drop significantly and fall to around 80% in some
+parts of the UK by 2003. This eventually contributed to a large measles
+outbreak in 2013.
+
+A partial retraction of the paper occurred in 2004, which helped public
+perception of the vaccine. This report uses data from the Scottish
+Childhood Immunisation Record System (SCIRS) to investigate whether
+measles susceptibility among primary school children in Glasgow changed
+over the period 1998--2012, and whether any change can be linked to the
+2004 partial retraction of the paper.
+
+The data cover 133 intermediate zones (IZs) in Glasgow, which are small
+geographic units of roughly 4,000 residents each. For each IZ and year,
+we have the number of primary school children susceptible to measles
+(`Y`) and the total number of primary school children (`N`).
+
+The two questions we aim to answer are:
+
+1.  Did measles susceptibility in Glasgow change following the Wakefield
+    retraction?
+2.  Did this change occur specifically around 2004?
+
+# Exploratory Data Analysis
+
+```{r}
+# summarise by year - want mean proportion, sd, min, max per year
+year_sum <- dat %>%
+  group_by(Year) %>%
+  summarise(
+    n_iz     = n(),
+    mean_p   = round(mean(prop), 4),
+    sd_p     = round(sd(prop), 4),
+    min_p    = round(min(prop), 4),
+    max_p    = round(max(prop), 4)
+  )
+```
+
+```{r}
+#| label: tbl-summary
+#| tbl-cap: "Summary statistics for the proportion of primary school children susceptible to measles, by year."
+
+kable(year_sum,
+      col.names = c("Year", "IZs", "Mean", "SD", "Min", "Max"),
+      booktabs  = TRUE) %>%
+  kable_styling(latex_options = "hold_position", font_size = 9) %>%
+  add_header_above(c(" " = 2, "Proportion susceptible" = 4))
+```
+
+@tbl-summary shows how the mean proportion of susceptible children
+changed over time. There is an increase from 1998 through to around
+2003, followed by a decline from 2004 onwards, which lines up with the
+timing of the Wakefield retraction.
+
+```{r}
+#| label: fig-trend
+#| fig-cap: "Mean proportion susceptible per year across all 133 Glasgow IZs. Error bars show +/- 1 standard error. The dashed line marks 2004."
+#| fig-width: 6
+#| fig-height: 3.2
+#| fig-align: center
+
+ggplot(year_sum, aes(x = Year, y = mean_p)) +
+  geom_line(colour = "steelblue") +
+  geom_point(colour = "steelblue", size = 2) +
+  geom_errorbar(aes(ymin = mean_p - sd_p/sqrt(n_iz),
+                    ymax = mean_p + sd_p/sqrt(n_iz)),
+                width = 0.3, colour = "steelblue", alpha = 0.7) +
+  geom_vline(xintercept = 2004, linetype = "dashed", colour = "firebrick") +
+  annotate("text", x = 2004.2, y = max(year_sum$mean_p) * 0.99,
+           label = "2004 retraction", hjust = 0, size = 3, colour = "firebrick") +
+  labs(x = "Year", y = "Mean proportion susceptible") +
+  theme_minimal()
+```
+
+@fig-trend shows the overall pattern of susceptibility rising from 1998,
+peaks around 2003, then falls after 2004. This is consistent with the
+drop in vaccination rates following the 1998 paper, and a recovery in
+uptake after the retraction.
+
+```{r}
+#| label: fig-box
+#| fig-cap: "IZ-level proportion susceptible by year. Each box summarises the 133 IZs for that year. Dashed line marks 2004."
+#| fig-width: 7
+#| fig-height: 3.2
+#| fig-align: center
+
+ggplot(dat, aes(x = factor(Year), y = prop)) +
+  geom_boxplot(fill = "lightsteelblue", outlier.size = 0.7, outlier.alpha = 0.4) +
+  geom_vline(xintercept = 6.5,   # 2004 is the 7th year (1998,99,00,01,02,03,2004)
+             linetype = "dashed", colour = "firebrick") +
+  labs(x = "Year", y = "Proportion susceptible") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+@fig-box shows the distribution across IZs for each year. There is
+moderate variation between IZs, which makes sense given that different
+areas will have different vaccination uptake.
+
+# Formal Analysis
+
+## Model
+
+Since our outcome is a count of susceptible children out of a total
+(i.e., Y out of N), the model proposed is a binomial GLM with a logit
+link, which is a logistic regression model but for proportional count
+data rather than individual 0/1 outcomes.
+
+We want to test whether the trend in susceptibility changed at 2004, so
+we fit a model with an interaction term between year and the post-2004
+indicator:
+
+$$
+\log\left(\frac{\pi_i}{1-\pi_i}\right) = \beta_0 + \beta_1 \cdot \text{Year}_i^* + \beta_2 \cdot \mathbb{1}[\text{post}] + \beta_3 \cdot (\text{Year}_i^* \times \mathbb{1}[\text{post}])
+$$
+
+where $\text{Year}^*$ is the year centred at 2004, and
+$\mathbb{1}[\text{post}]$ equals 1 for 2004 and later. The interaction
+$\beta_3$ captures whether the slope differs before vs after 2004.
