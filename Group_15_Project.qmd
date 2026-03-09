@@ -22,10 +22,11 @@ library(ggplot2)
 library(broom)
 library(knitr)
 library(kableExtra)
+library(sjPlot)
 ```
 
 ```{r}
-dat <- read.csv("DAProject15.csv")
+dat <- read.csv('DAProject15.csv')
 
 # create proportion column (Y susceptible out of N total)
 dat$prop <- dat$Y / dat$N
@@ -40,9 +41,17 @@ dat$post <- ifelse(dat$Year >= 2004, 1, 0)
 
 # Introduction
 
+<!--
+Are we referencing for this report? If so, we will require some for this section.
+Some interesting articles include:
+- https://pmc.ncbi.nlm.nih.gov/articles/PMC3136032/ (National Institutes of Health)
+- https://www.bmj.com/content/342/bmj.c7452 (British Medical Journal)
+- https://www.chop.edu/vaccine-education-center/vaccine-safety/vaccines-and-other-conditions/autism (Children's Hospital of Philadelphia)
+--> 
+
 The measles, mumps and rubella (MMR) vaccine has been an important part
 of childhood immunisation programmes in the UK since the late 1980s. In
-1998, Wakefield published a paper claiming a link between the MMR
+1998, researcher Andrew Wakefield published a paper claiming a link between the MMR
 vaccine and autism. Although the study was later found to be fraudulent
 and was fully retracted in 2010, the media coverage it received caused
 vaccination rates to drop significantly and fall to around 80% in some
@@ -68,6 +77,10 @@ The two questions we aim to answer are:
 2.  Did this change occur specifically around 2004?
 
 # Exploratory Data Analysis
+
+<!--
+Is the IZ column necessary? 
+-->
 
 ```{r}
 # summarise by year - want mean proportion, sd, min, max per year
@@ -118,10 +131,23 @@ ggplot(year_sum, aes(x = Year, y = mean_p)) +
   theme_minimal()
 ```
 
+<!--
+Our explanatory analysis only addresses question 1. We can also 
+talk about how the downward trend only starts to take place after 2008, not 
+specifically 2004 as asked in question 2. Seems to imply it took at least 4 years
+for an uptake in MMR vaccines.
+-->
+
 @fig-trend shows the overall pattern of susceptibility rising from 1998,
 peaks around 2003, then falls after 2004. This is consistent with the
 drop in vaccination rates following the 1998 paper, and a recovery in
-uptake after the retraction.
+uptake after the retraction. However, the change in the overall trend does not 
+occur in 2004 directly. There appears to be an overall increase in susceptibility
+until 2008. That is, there appears to be a delayed effect.
+
+<!--
+Vertical line for 2004 appears to be misaligned when rendered. Moving it to 2004 blocks some of the information. Maybe remove it for this plot?
+-->
 
 ```{r}
 #| label: fig-box
@@ -156,10 +182,34 @@ We want to test whether the trend in susceptibility changed at 2004, so
 we fit a model with an interaction term between year and the post-2004
 indicator:
 
+<!--
+We should probably directly introduce the pi variable as the our proportion (y_i/n_i).
+-->
+
 $$
 \log\left(\frac{\pi_i}{1-\pi_i}\right) = \beta_0 + \beta_1 \cdot \text{Year}_i^* + \beta_2 \cdot \mathbb{1}[\text{post}] + \beta_3 \cdot (\text{Year}_i^* \times \mathbb{1}[\text{post}])
 $$
 
 where $\text{Year}^*$ is the year centred at 2004, and
 $\mathbb{1}[\text{post}]$ equals 1 for 2004 and later. The interaction
-$\beta_3$ captures whether the slope differs before vs after 2004.
+$\beta_3$ captures whether the slope differs before vs after 2004. Here, 
+$\pi_i$ is the proportion of children susceptible to measles in year level $i$.
+
+Fitting the this proposed model produced the following summary output. 
+
+```{r}
+#| echo: false
+model <- glm(cbind(Y,N-Y) ~ yr_c + post + yr_c*post, family = binomial, dat)
+tab_model(model, show.aic = T, show.ci = F)
+```
+
+<!--
+Need to analyse the meanings of these estimates.
+-->
+
+<!--
+An idea for addressing question 2 is by moving our post covariate to mark years after 
+2008 rather than 2004. This is because our there seems to be a greater decline in 
+susceptibility after 2008. By showing that the post covariate becomes more significant, 
+we can infer that the change more likely occured in 2008.
+-->
