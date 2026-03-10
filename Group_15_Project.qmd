@@ -54,7 +54,7 @@ of childhood immunisation programmes in the UK since the late 1980s. In
 1998, researcher Andrew Wakefield published a paper claiming a link between the MMR
 vaccine and autism. Although the study was later found to be fraudulent
 and was fully retracted in 2010, the media coverage it received caused
-vaccination rates to drop significantly and fall to around 80% in some
+vaccination rates to drop significantly, falling to around 80% coverage in some
 parts of the UK by 2003. This eventually contributed to a large measles
 outbreak in 2013.
 
@@ -80,6 +80,7 @@ The two questions we aim to answer are:
 
 <!--
 Is the IZ column necessary? 
+Would this table be more readable as a % rather than raw proportion?
 -->
 
 ```{r}
@@ -132,10 +133,10 @@ ggplot(year_sum, aes(x = Year, y = mean_p)) +
 ```
 
 <!--
-Our explanatory analysis only addresses question 1. We can also 
+Our explanatory analysis only addresses question 1. We could also 
 talk about how the downward trend only starts to take place after 2008, not 
 specifically 2004 as asked in question 2. Seems to imply it took at least 4 years
-for an uptake in MMR vaccines.
+for an uptake in MMR vaccines post partial retraction.
 -->
 
 @fig-trend shows the overall pattern of susceptibility rising from 1998,
@@ -146,20 +147,21 @@ occur in 2004 directly. There appears to be an overall increase in susceptibilit
 until 2008. That is, there appears to be a delayed effect.
 
 <!--
-Vertical line for 2004 appears to be misaligned when rendered. Moving it to 2004 blocks some of the information. Maybe remove it for this plot?
+Vertical line for 2004 appears to be misaligned when rendered. Moving it to 2004 
+blocks some of the information. Maybe remove it for this plot?
 -->
 
 ```{r}
 #| label: fig-box
-#| fig-cap: "IZ-level proportion susceptible by year. Each box summarises the 133 IZs for that year. Dashed line marks 2004."
+#| fig-cap: "IZ-level proportion susceptible by year. Each box summarises the 133 IZs for that year."
 #| fig-width: 7
 #| fig-height: 3.2
 #| fig-align: center
 
 ggplot(dat, aes(x = factor(Year), y = prop)) +
   geom_boxplot(fill = "lightsteelblue", outlier.size = 0.7, outlier.alpha = 0.4) +
-  geom_vline(xintercept = 6.5,   # 2004 is the 7th year (1998,99,00,01,02,03,2004)
-             linetype = "dashed", colour = "firebrick") +
+#  geom_vline(xintercept = 6.5,   # 2004 is the 7th year (1998,99,00,01,02,03,2004)
+ #            linetype = "dashed", colour = "firebrick") +
   labs(x = "Year", y = "Proportion susceptible") +
   theme_minimal() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
@@ -199,17 +201,58 @@ Fitting the this proposed model produced the following summary output.
 
 ```{r}
 #| echo: false
-model <- glm(cbind(Y,N-Y) ~ yr_c + post + yr_c*post, family = binomial, dat)
-tab_model(model, show.aic = T, show.ci = F)
+#| tbl-cap: "Table 2: Model summary for binomial model centred at 2004."
+
+model_binom <- glm(cbind(Y,N-Y) ~ yr_c + post + yr_c*post, family = binomial, dat)# Fit Binomial model
+
+# Model summary
+tab_model(model_binom, show.aic = T, show.ci = F)
+
 ```
 
 <!--
-Need to analyse the meanings of these estimates.
+Need to interpret these coefficients.
 -->
 
 <!--
-An idea for addressing question 2 is by moving our post covariate to mark years after 
-2008 rather than 2004. This is because our there seems to be a greater decline in 
-susceptibility after 2008. By showing that the post covariate becomes more significant, 
-we can infer that the change more likely occured in 2008.
+Just going to insert code that fits Poisson model here. We would need to introduce this properly.
 -->
+
+```{r}
+#| echo: false
+#| eval: false
+
+# Fit Poisson model
+model_pois <- glm(Y ~ yr_c + post + yr_c*post + offset(log(N)), family = poisson, dat)
+
+# Model summary
+tab_model(model_pois, show.aic = T, show.ci = F)
+
+# AIC comparison
+AIC(model_binom, model_pois) %>% kable() %>% kable_styling()
+```
+
+<!--
+An idea for addressing question 2 is by moving our post covariate to mark years after 
+2008 rather than 2004. That is, there seems to be a greater decline in susceptibility 
+after 2008. By doing some model comparisons, we can infer that the change in measles 
+susceptibility occurred post 2008.
+I've included what such an alternative model may look like.
+-->
+
+```{r}
+#| echo: false
+#| tbl-cap: "Table 3: Model summary for binomial model centred at 2008."
+
+# Define alternative dataset centred around 2008.
+dat_alt <- dat
+dat_alt$post <- ifelse(dat_alt$Year >= 2008, 1, 0)
+dat_alt$yr_c <- dat_alt$yr_c - 4
+
+# Fit model
+model_binom_alt <- glm(cbind(Y,N-Y) ~ yr_c + post + yr_c*post, family = binomial, data = dat_alt)
+
+# Model summary
+tab_model(model_binom_alt, show.ci = F, show.aic = T)
+
+```
