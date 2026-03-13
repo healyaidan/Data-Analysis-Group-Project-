@@ -1,0 +1,203 @@
+---
+title: "Measles Susceptibility in Glasgow"
+author: "Tomas Badia"
+
+execute:
+  echo: false
+  eval: true
+
+format:
+  pdf:
+    pdf-engine: xelatex
+    toc: true
+    number-sections: true
+    colorlinks: true
+---
+
+```{r}
+#| echo: false
+#| warning: false
+#| message: false
+library(tidyverse)    # Data wrangling 
+library(ggplot2)      # Data visualization
+library(performance)
+library(skimr)        # Exploratory analysis
+library(sjPlot)       # Plot and tables for linear models   # Formatting html table
+```
+
+# Introduction {#sec-intro}
+
+```{r}
+#| echo: false
+data <- read.csv("DAProject15.csv")
+```
+
+Measles is a contagious viral disease effectively prevented by the MMR vaccine. Despite its success, a 1998 study by Andrew Wakefield—later retracted in 2004 for ethical and methodological flaws—falsely linked the vaccine to autism, causing vaccination rates to drop.
+
+This project analyzes measles susceptibility among pre-school children across 133 Glasgow zones from 1998 to 2012. It aims to determine if susceptibility trends shifted following the 2004 retraction of the Wakefield article
+
+# Exploratory Analysis {#sec-EA}
+
+The dataset contains the following variables:
+
+- \(Y\): number of pre-school children susceptible to measles
+- \(N\): total number of pre-school children
+- \(Year\): year the data was collected
+
+The outcome of interest is the **proportion of susceptible children**
+
+$$
+p = \frac{Y}{N}
+$$
+
+```{r}
+data$prop <- data$Y / data$N
+summary(data)
+```
+
+The mean proportion of susceptible children is approximately 6%, although there is noticeable variation across intermediate zones. Some zones exhibit much higher susceptibility levels, indicating spatial heterogeneity.
+
+The number of children in each zone ranges widely, with an average of roughly 100 children per zone.
+
+```{r}
+aggregate(prop ~ Year, data, mean)
+```
+
+These averages suggest susceptibility increased during the early 2000s before declining again toward the end of the study period
+
+Visualising the Trend
+```{r}
+library(ggplot2)
+
+ggplot(data, aes(x = Year, y = prop)) +
+  geom_point(alpha = 0.4) +
+  geom_smooth(method = "loess", se = FALSE) +
+  ylab("Proportion susceptible") +
+  ggtitle("Measles susceptibility in Glasgow preschool children")
+```
+
+The plot shows a small gradual rise in susceptibility during the early 2000s followed by a decline after approximately 2008. Importantly, there is no clear structural break around 2004, when the Wakefield article was retracted
+
+# Formal Analysis {#sec-FA}
+
+The data consists of counts of susceptible children out of a total,
+therefor an appropraite model is binomial logistic regression 
+$$
+Y_i \sim \text{Binomial}(N_i, p_i)
+$$ 
+$$
+\text{logit}(p_i) = \beta_0 + \beta_1 X_i
+$$ 
+where 
+- $\text{logit}(p_i) = \log \left(\frac{p_i}{1 - p_i}\right)$
+- $p_i$ is the probability that a child in zone $i$ is susceptible 
+- The parameter $beta_1$ meausres the change in log-odds of measeles
+suseptibility after 2004
+- $X_i$ is an indicator variable representing whether the observation occurred after the Wakefield retraction, i.e. 2004 onwards 
+
+$$
+X_i =
+\begin{cases}
+0 & \text{if Year} < 2004 \\
+1 & \text{if Year} \ge 2004
+\end{cases}
+$$ 
+
+$$
+\log \left(\frac{p_i}{1 - p_i}\right) = \beta_0 + \beta_1 X_i
+$$
+
+- Expected number of susceptible children is $E[Y_i] = N_i p_i$
+- Model with year as a factor is $\text{logit}(p_i) = \beta_0 + \sum_{k=1999}^{2012} \beta_k I(\text{Year}_i = k)$, where $I(.)$ is an indicator function
+
+```{r}
+data$post2004 <- ifelse(data$Year >= 2004, 1, 0)
+```
+
+Fit binomial Logistic regression
+
+```{r}
+model <- glm(
+  cbind(Y, N - Y) ~ post2004,
+  family = binomial,
+  data = data
+)
+
+summary(model)
+```
+The intercept corresponds to the log-odds of measles susceptibility before 2004. Converting this value to a probability gives about 0.059
+
+The coefficient for post2004 represents the change in log-odds of susceptibility after the retraction of the Wakefield article. The estimated coefficient is 0.0097, which is extremely small and not statistically significant (p=0.733). This indicates that there is no evidence that measles susceptibility changed after 2004\
+
+The model deviance also shows virtually no improvement when including the post2004 variable: Null deviance: 2179.6, Residual deviance: 2179.5. This minimal change further suggests that the post-2004 indicator does not meaningfully explain variation in susceptibility.
+
+To specifically test whether the change occurred around 2004, a
+year-specific model can be fitted
+
+```{r}
+model_year <- glm(
+  cbind(Y, N - Y) ~ factor(Year),
+  family = binomial,
+  data = data
+)
+
+summary(model_year)
+```
+The positive coefficients indicate that the log-odds of susceptibility were higher in the early 2000s, with the largest increase occurring in 2008. However, the coefficients for 2010 and 2012 are not statistically significant, suggesting that susceptibility levels returned closer to the baseline level in later years.
+
+This model substantially improves model fit: Null deviance: 2179.6, Residual deviance: 1966.6
+indicating that susceptibility varies significantly across years.
+
+However, the pattern of results suggests that susceptibility increased gradually in the early 2000s rather than changing sharply in 2004. Therefore, although susceptibility varied over time, there is no clear evidence that the Wakefield article’s retraction caused an immediate shift in measles susceptibility.
+
+
+A likelihood ratio test was performed to determine whether the model including the post2004 variable provides a better fit than a model with no predictors
+```{r}
+model_null <- glm(
+  cbind(Y, N - Y) ~ 1,
+  family = binomial,
+  data = data
+)
+
+anova(model_null, model, test = "Chisq")
+```
+
+The deviance difference between the models is chi-sqaured =0.1167 with a corresponding p-value of 0.7326.
+Since the p-value is far larger than 0.05, there is no statistical evidence that including the post-2004 indicator improves the model. Therefore, the data do not support the hypothesis that measles susceptibility changed after the Wakefield article was retracted.
+
+
+```{r}
+library(dplyr)
+
+summary_data <- data %>%
+  group_by(post2004) %>%
+  summarise(
+    susceptible = sum(Y),
+    total = sum(N),
+    prop = susceptible / total
+  )
+
+summary_data
+```
+
+Plot:
+
+```{r}
+ggplot(summary_data, aes(x = factor(post2004), y = prop)) +
+  geom_bar(stat = "identity") +
+  xlab("Period (0 = before 2004, 1 = 2004 onwards)") +
+  ylab("Estimated susceptibility proportion") +
+  ggtitle("Average measles susceptibility before and after 2004")
+```
+These proportions are almost identical, differing by only 0.05 percentage points, which supports the regression results showing no meaningful change following the article's retraction
+
+# Conclusions {#sec-con}
+
+Across all analyses:
+
+The post-2004 logistic regression shows no statistically significant change.
+The likelihood ratio test confirms that adding the post-2004 indicator does not improve the model.
+The aggregated proportions before and after 2004 are almost identical.
+The year-specific model shows variation across years, but the changes occur gradually rather than specifically in 2004.
+
+Together, these results indicate that measles susceptibility in Glasgow did not exhibit a clear change following the retraction of the Wakefield article
