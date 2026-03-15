@@ -187,10 +187,6 @@ indicator:
 <!--
 We should probably directly introduce the pi variable as the our proportion (y_i/n_i).
 -->
-<!--TB
-Included Deviance
-I will discuss the deviance and chisq
--->
 
 
 $$
@@ -211,22 +207,41 @@ Fitting the this proposed model produced the following summary output.
 model_binom <- glm(cbind(Y,N-Y) ~ yr_c + post + yr_c*post, family = binomial, dat)# Fit Binomial model
 
 # Model summary
-tab_model(model_binom, show.aic = T, show.ci = F,show.dev = T)
+tab_model(model_binom, show.aic = T, show.ci = F, show.dev = T)
 
 ```
 
+<!--
+TB
+difference in deviance (null - residual deviance), using a chi-squared dis to test if significant.
 -->
-<!--TB
-to test significance of each variable in the model. This shows all are significant(small p-values). Additionally chi square do
+
+```{r}
+#| echo: false
+#| output: false
+pchisq((2179.6-2044.5), df = 3, lower.tail = FALSE)
+```
+<!--
+TB
+possible answer of code above: Model fit improved substantially compared with the null model, with deviance decreasing from 2179.6 (930 df) to 2044.5 (927 df). This reduction of $\chi^2 = 135.1$ with 3 degrees of freedom is highly significant ($p < 0.05$), indicating the predictors significantly improve the model fit.
+-->
+
+<!--
+TB
+Summary gives us excact coefficients
 -->
 ```{r}
 #| echo: false
+#| output: false
 summary(model_binom)
-?tab_model
 ```
 
 <!--
 Need to interpret these coefficients.
+-->
+<!--
+(TB - possible answer to the coefficients interpretation. Word count could be cut??) 
+The binomial logistic regression model suggests that measles susceptibility changed significantly over time and around the 2004 intervention point. Before 2004, the positive coefficient for `yr_c` ($\beta = 0.112$, $p < 0.001$) indicates that the log-odds of susceptibility were increasing each year. The coefficient for `post` ($\beta = -0.206$, $p = 0.001$) suggests a significant immediate decrease in susceptibility after 2004. Furthermore, the interaction term `yr_c:post` ($\beta = -0.162$, $p < 0.001$) indicates that the time trend changed after 2004, with the slope becoming negative. Overall, this suggests that susceptibility was rising before 2004 but began to decline slightly afterwards, indicating a significant change in trend following the retraction of the Wakefield article.
 -->
 
 
@@ -237,9 +252,11 @@ after 2008. By doing some model comparisons, we can infer that the change in mea
 susceptibility occurred post 2008.
 I've included what such an alternative model may look like.
 -->
-<!--TB
+
+<!--
+TB
 Included Deviance
-I will discuss the deviance and chisq
+discussed deviance with repsect to previous model. This is below the code
 -->
 
 ```{r}
@@ -258,13 +275,52 @@ model_binom_alt <- glm(cbind(Y,N-Y) ~ yr_c + post + yr_c*post, family = binomial
 tab_model(model_binom_alt, show.ci = F, show.aic = T, show.dev = T)
 ```
 
+<!--
+TB (possible discussion around comparing deviances and AIC for the model_binom and model_binom_alt)
+The model centred at 2004 has a residual deviance of 2044.5 and AIC of 5156.5, while the model centred at 2008 has a lower residual deviance of 2002.9 and AIC of 5115. Since both the deviance and AIC are smaller for the model centred at 2008, it provides a better fit to the data. This suggests that the change in measles susceptibility alogns more with a shift occurring closer to 2008 rather than exactly in 2004 (reinforcing the possible lag in sentiment between the article retraction and actual increase in vacinations). However, both models show statistically significant effects for the post-intervention term and the change in slope.
+-->
 
 
+<!--
+TB (couldn't find it, so useless on github, hope i didn't mess up anything)
+Model with year as factor and analysis below
+-->
+```{r}
+#| echo: false
+#| tbl-cap: "Table 4: Odds Ratios for Year-on-Year Susceptibility Relative to 1998 Baseline"
+model_year <- glm(
+  cbind(Y, N - Y) ~ factor(Year),
+  family = binomial,
+  data = dat
+)
+
+tab_model(model_year, show.ci = F, show.aic = T, show.dev = T)
+
+```
+
+```{r}
+#| echo: false
+summary(model_year)
+```
+
+```{r}
+chi_stat <- 2179.6 - 1966.6
+df <- 930 - 924
+pchisq(chi_stat, df = df, lower.tail = FALSE)
+```
+
+<!--
+TB
+The year-specific logistic regression model shows that measles susceptibility varied significantly across years in Glasgow. Compared with the baseline year (1998), susceptibility increased significantly in 2000, 2002, 2004 and 2008, with the largest increase occurring in 2008 (OR = 1.70, $p < 0.001$). However, there was no significant difference in 2010 or 2012. This suggests that Glasgow did experience changes in measles susceptibility over time.
+
+However, the results do not indicate a clear change occurring specifically in 2004, the year of the Wakefield article retraction. Instead, susceptibility appears to continue increasing after 2004 and peaks around 2008, suggesting the effect was not immediate.
+-->
 
 
-
-
-
+<!--
+TB (conclusion?? comparing all three models, rough draft)
+This finding is consistent with the earlier piecewise logistic regression models. The model centred at 2004 indicated a significant change in trend after 2004 but still showed susceptibility increasing before that point. When the model was centred at 2008, model fit improved further (lower residual deviance and AIC), suggesting that the change in susceptibility may have occurred later than 2004. Taken together, the models suggest that while measles susceptibility changed over time in Glasgow, the shift did not occur precisely in 2004 and instead appears to have occurred closer to 2008.
+-->
 
 
 
